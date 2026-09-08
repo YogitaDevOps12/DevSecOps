@@ -1,0 +1,136 @@
+pipeline {
+    agent any
+
+    environment {
+    DOCKER_IMAGE = "yg7821/devopsexamapp:latest"
+    SCANNER_HOME = tool 'sonar-scanner'
+		AWS_CREDENTIALS_ID = 'aws-credentials'
+		AWS_REGION = 'ap-south-1'
+		EKS_CLUSTER_NAME = 'my-eks-cluster'
+		ZAP_DIR = "${workspace}"
+		TARGET_URL = 'http://65.0.131.40:5000'
+    }
+
+    stages {
+
+        stage('Git Checkout') {
+            steps {
+                echo "📦 Checking out source code..."
+                git(
+                    url: 'https://github.com/YogitaDevOps12/DevSecOps.git',          
+                    branch: 'main'
+                )
+            }
+        }
+       
+        stage('Prepare Workspace') {
+            steps {
+                // Ensure a clean directory exists to store the generated OWASP reports
+                sh 'mkdir -p ${ZAP_DIR}'
+                sh 'chmod 777 ${ZAP_DIR}' 
+            }
+        }    
+
+        stage('File System Scan') {
+            steps {
+                echo "🔍 Running Trivy File System Scan..."
+                sh "trivy fs --security-checks vuln,config --format table -o trivy-fs-report.html ."
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                echo "🧠 Running SonarQube Code Analysis..."
+                withSonarQubeEnv('sonar') {
+                    sh """
+                    ${SCANNER_HOME}/bin/sonar-scanner \
+                    -Dsonar.projectName=devops-exam-app \
+                    -Dsonar.projectKey=devops-exam-app \
+                    -Dsonar.sources=. \
+                    -Dsonar.language=py \
+                    -Dsonar.python.version=3 \
+                    -Dsonar.host.url=http://localhost:9000
+                    """
+                }
+            }
+        }
+
+        stage('Build and Push Docker Image') {
+            steps {
+                dir('quizapp') {
+                    script {
+                        echo "🐳 Building and pushing Docker image..."
+                        
+                        withDockerRegistry(credentialsId: 'docker') {
+                            sh "docker build -t ${DOCKER_IMAGE} ."
+                            sh "docker push ${DOCKER_IMAGE}"
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Trivy Image Scan') {
+            steps {
+                sh "trivy image --security-checks vuln,config --format table -o trivy-image-report.html ${DOCKER_IMAGE}"
+            }
+        }
+
+        stage('Connect & Deploy to EKS') {
+            steps {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding', 
+                    credentialsId: "${AWS_CREDENTIALS_ID}"
+                ]]) {
+                    sh """
+                        # Update kubeconfig to point to your EKS cluster
+                        aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER_NAME}
+                        
+                        # Verify connection
+                        kubectl get nodes
+                        
+                        # Deploy application
+                        kubectl apply -f k8s/configmap.yaml
+                        kubectl apply -f k8s/secret.yaml
+                        kubectl apply -f k8s/pv.yaml
+                        kubectl apply -f k8s/pvc.yaml
+                        kubectl apply -f k8s/service.yaml
+                        kubectl apply -f k8s/deployment.yaml
+                        kubectl apply -f k8s/statefulset.yaml                        
+                    """
+                }
+            }
+        }
+
+		stage('OWASP DAST ZAP SCAN') {
+            steps {
+			     script {
+			         withDockerRegistry(credentialsId: 'docker') {
+                     sh  """
+                         docker run --user root \
+                         -v	${ZAP_DIR}:/zap/wrk/:rw \
+                         zaproxy/zap-stable zap.sh -cmd -autorun /zap/wrk/zap.yaml \
+                         -zapit ${TARGET_URL} \
+                         -quickout zap_report.html
+                         """
+			         }     
+            }
+     } 
+
+    post {
+        success {
+            echo '🎉 Deployment successful!'
+            archiveArtifacts artifacts: 'trivy-fs-report.html', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'trivy-image-report.html', allowEmptyArchive: true
+			archiveArtifacts artifacts: 'zap_report.html', fingerprint: true
+        }
+
+        always {
+            archiveArtifacts artifacts: 'trivy-fs-report.html', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'trivy-image-report.html', allowEmptyArchive: true
+			archiveArtifacts artifacts: 'zap_report.html', fingerprint: true
+        }
+     }
+   }
+ }
+}
