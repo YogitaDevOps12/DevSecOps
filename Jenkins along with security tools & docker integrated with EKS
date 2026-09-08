@@ -8,7 +8,7 @@ pipeline {
 		AWS_REGION = 'ap-south-1'
 		EKS_CLUSTER_NAME = 'my-eks-cluster'
 		ZAP_DIR = "${workspace}"
-		TARGET_URL = 'http://65.1.95.106:5000' # Make sure that the IP is here the Public IP of the EC2 currently in use
+		TARGET_URL = 'http://65.1.95.106:5000'  # Make sure that the IP is here the Public IP of the EC2 currently in use
     }
 
     stages {
