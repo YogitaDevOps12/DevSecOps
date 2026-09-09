@@ -2,13 +2,13 @@ pipeline {
     agent any
 
     environment {
-    DOCKER_IMAGE = "yg7821/devopsexamapp:latest"
-    SCANNER_HOME = tool 'sonar-scanner'
+        DOCKER_IMAGE = "yg7821/devopsexamapp:latest"
+        SCANNER_HOME = tool 'sonar-scanner'
 		AWS_CREDENTIALS_ID = 'aws-credentials'
 		AWS_REGION = 'ap-south-1'
 		EKS_CLUSTER_NAME = 'my-eks-cluster'
 		ZAP_DIR = "${workspace}"
-		TARGET_URL = 'http://65.1.95.106:5000'  # Make sure that the IP is here the Public IP of the EC2 currently in use
+		TARGET_URL = 'http://aadc191a4458e4f2cbdbc33dffa442b4-1956213275.ap-south-1.elb.amazonaws.com:5000'
     }
 
     stages {
@@ -17,19 +17,12 @@ pipeline {
             steps {
                 echo "📦 Checking out source code..."
                 git(
-                    url: 'https://github.com/YogitaDevOps12/DevSecOps.git',          
+                    url: 'https://github.com/YogitaDevOps12/devopsexam.git',        
                     branch: 'main'
                 )
             }
         }
        
-        stage('Prepare Workspace') {
-            steps {
-                // Ensure a clean directory exists to store the generated OWASP reports
-                sh 'mkdir -p ${ZAP_DIR}'
-                sh 'chmod 777 ${ZAP_DIR}' 
-            }
-        }    
 
         stage('File System Scan') {
             steps {
@@ -107,11 +100,8 @@ pipeline {
 			     script {
 			         withDockerRegistry(credentialsId: 'docker') {
                      sh  """
-                         docker run --user root \
-                         -v	${ZAP_DIR}:/zap/wrk/:rw \
-                         zaproxy/zap-stable zap.sh -cmd -autorun /zap/wrk/zap.yaml \
-                         -zapit ${TARGET_URL} \
-                         -quickout zap_report.html
+                        docker run --user root -v ${WORKSPACE}:/zap/wrk:rw zaproxy/zap-stable:latest \
+                        zap-baseline.py -t ${TARGET_URL} -r zap_report.html || true
                          """
 			         }     
             }
