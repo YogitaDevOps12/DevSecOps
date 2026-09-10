@@ -8,7 +8,7 @@ pipeline {
 		AWS_REGION = 'ap-south-1'
 		EKS_CLUSTER_NAME = 'my-eks-cluster'
 		ZAP_DIR = "${workspace}"
-		TARGET_URL = 'http://aadc191a4458e4f2cbdbc33dffa442b4-1956213275.ap-south-1.elb.amazonaws.com:5000'
+		TARGET_URL = 'http://ad187ed7b10d649bf9de04d9ae15d2fd-144480229.ap-south-1.elb.amazonaws.com:5000'
     }
 
     stages {
