@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_IMAGE = "yg7821/devopsexamapp:latest"
+        DOCKER_IMAGE = "yg7821/devopsexamapp:v4"
         SCANNER_HOME = tool 'sonar-scanner'
 		AWS_CREDENTIALS_ID = 'aws-credentials'
 		AWS_REGION = 'ap-south-1'
