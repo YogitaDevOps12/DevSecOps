@@ -94,8 +94,30 @@ pipeline {
                 }
             }
         }
+		
+        stage('Deploy Monitoring Stack') {
+            steps {
+               withCredentials([[
+                   $class: 'AmazonWebServicesCredentialsBinding',
+                   credentialsId: "${AWS_CREDENTIALS_ID}"
+               ]]) {
+                   sh """
+                       aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER_NAME}
 
-       stage('Get Load Balancer URL') {
+                       helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+                       helm repo update
+
+                       helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+                       --namespace devsecops --create-namespace
+
+                       kubectl apply -f k8s/grafana-service.yaml
+                  """
+               }
+           }
+       }		
+		
+
+       stage('Get Load Balancer URL for the App') {
             steps {
                 withCredentials([[
                     $class: 'AmazonWebServicesCredentialsBinding',
@@ -143,7 +165,7 @@ pipeline {
             }
         }
                  
-		stage('OWASP ZAP DAST SCAN') {
+		stage('OWASP ZAP DAST Scan') {
             steps {
 			     script {
 			         withDockerRegistry(credentialsId: 'docker') {
