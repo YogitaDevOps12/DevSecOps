@@ -31,7 +31,7 @@ sudo apt install kubectl -y
 5.) Verify the version of kubectl installed
 kubectl version --client
 
-6.) After configuring AWS credentials (aws configure) in the Jenkins server, check the cluster config using:
+6.) After Terraform completes EKS provisioning, configure AWS credentials (aws configure) in the Jenkins server and check the cluster config using:
 
 cd ~/.kube/config
 kubectl cluster-info
