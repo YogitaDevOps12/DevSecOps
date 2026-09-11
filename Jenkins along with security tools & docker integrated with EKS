@@ -8,7 +8,6 @@ pipeline {
 		AWS_REGION = 'ap-south-1'
 		EKS_CLUSTER_NAME = 'my-eks-cluster'
 		ZAP_DIR = "${workspace}"
-		TARGET_URL = 'http://ad187ed7b10d649bf9de04d9ae15d2fd-144480229.ap-south-1.elb.amazonaws.com:5000'
     }
 
     stages {
@@ -89,23 +88,75 @@ pipeline {
                         kubectl apply -f k8s/pvc.yaml
                         kubectl apply -f k8s/service.yaml
                         kubectl apply -f k8s/deployment.yaml
-                        kubectl apply -f k8s/statefulset.yaml                        
+                        kubectl apply -f k8s/statefulset.yaml
+						
                     """
                 }
             }
         }
 
+       stage('Get Load Balancer URL') {
+            steps {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: "${AWS_CREDENTIALS_ID}"
+                ]]) {
+                    script {
+                        def lbHost = ''
+                        // Retry a few times in case the ELB hostname isn't populated yet.
+                        // Uses {range ...}{end} so an empty ingress array prints nothing
+                        // instead of kubectl throwing an "array index out of bounds"
+                        // error - and wraps the call in try/catch so a genuine failure
+                        // on any single attempt doesn't kill the whole retry loop.
+                        for (int i = 0; i < 15 && !lbHost; i++) {
+                            try {
+                                lbHost = sh(
+                                    script: "kubectl get svc flask -o jsonpath='{range .status.loadBalancer.ingress[*]}{.hostname}{end}'",
+                                    returnStdout: true
+                                ).trim()
+                            } catch (e) {
+                                echo "kubectl call failed on attempt ${i + 1}: ${e.getMessage()}"
+                            }
+                            if (!lbHost) {
+                                echo "Waiting for LoadBalancer hostname... (attempt ${i + 1}/15)"
+                                sleep(10)
+                            }
+                        }
+                        if (!lbHost) {
+                            error("Could not retrieve LoadBalancer hostname for service 'flask' after 15 attempts")
+                        }
+                        env.TARGET_URL = "http://${lbHost}:5000"
+                        echo "🎯 ZAP will scan: ${env.TARGET_URL}"
+                    }
+                }
+            }
+        }
+
+        
+ 
+
+
+        stage('Wait for App to be Reachable') {
+            steps {
+                echo "⏳ Waiting 35s for the ELB to register the new pod as a healthy target..."
+                sleep(35)
+            }
+        }
+                 
 		stage('OWASP ZAP DAST SCAN') {
             steps {
 			     script {
 			         withDockerRegistry(credentialsId: 'docker') {
                      sh  """
                         docker run --user root -v ${WORKSPACE}:/zap/wrk:rw zaproxy/zap-stable:latest \
-                        zap-baseline.py -t ${TARGET_URL} -r zap_report.html || true
+                        zap-baseline.py -t ${env.TARGET_URL} -r zap_report.html || true
                          """
-			         }     
+                    }
+                }
             }
-     } 
+        }
+    }
+           
 
     post {
         success {
@@ -120,7 +171,5 @@ pipeline {
             archiveArtifacts artifacts: 'trivy-image-report.html', allowEmptyArchive: true
 			archiveArtifacts artifacts: 'zap_report.html', fingerprint: true
         }
-     }
-   }
- }
+    }
 }
