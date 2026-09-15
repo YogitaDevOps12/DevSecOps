@@ -16,7 +16,7 @@ pipeline {
             steps {
                 echo "📦 Checking out source code..."
                 git(
-                    url: 'https://github.com/YogitaDevOps12/devopsexam.git',        
+                    url: 'https://github.com/YogitaDevOps12/devops_exam.git',        
                     branch: 'main'
                 )
             }
