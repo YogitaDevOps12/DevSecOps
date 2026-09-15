@@ -1,1 +1,8 @@
+We need to login to Docker Hub (https://hub.docker.com).
+
+In the jump server, create a SonarQube container using the below command:
 docker run -d --name sonar -p 9000:9000 sonarqube:lts-community
+
+After the container has been created, we can verify the SonarQube image pulled from DockerHub and the status of the newly created SonarQube container using:
+docker images
+docker ps
