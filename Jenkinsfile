@@ -42,6 +42,9 @@ pipeline {
                     -Dsonar.language=py \
                     -Dsonar.python.version=3 \
                     -Dsonar.host.url=http://localhost:9000
+					-Dsonar.exclusions=**/trivy-fs-report.html
+					-Dsonar.exclusions=**/trivy-image-report.html
+					-Dsonar.exclusions=**/zap_report.html
                     """
                 }
             }
